@@ -1,5 +1,5 @@
 import sys, os, math
-from mathutils import Matrix, Vector, Quaternion, Euler
+from mathutils import Vector
 import numpy as np
 import bpy
 
@@ -7,19 +7,22 @@ import bpy
 # USER CONFIG
 # ──────────────────────────────────────────────────────────────────────────────
 SMPL_MODEL_FOLDER = r"D:\projects\ClProjects\SMPL_Model"
-SMPL_GENDER       = "FEMALE"               # "MALE" | "FEMALE" | "NEUTRAL"
+SMPL_GENDER       = "FEMALE"  # "MALE" | "FEMALE" | "NEUTRAL"
 SMPL_PARAMS_FILE  = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_modified_params.npz"
 OUTPUT_FBX        = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m.fbx"
 
+# If smplx/torch aren't importable by Blender, add site-packages here
 EXTRA_PY_PATHS = [r"C:\Users\Lab\AppData\Roaming\Python\Python311\Scripts" + "\\..\\site-packages"]
-NUM_BETAS = 10
+
+NUM_BETAS  = 10
 UNIT_SCALE = 1.0
 
-# Fix SMPL → Blender frame (Z-forward → Z-up)
-FIX_SMPL_FRAME = True
+# Optional: set True to rotate SMPL’s Z-forward coordinates into Blender’s Z-up
+# (+90° around X). Only enable if your posed mesh looks "lying on its back".
+FIX_SMPL_FRAME = False
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Imports
+# Path setup & imports
 # ──────────────────────────────────────────────────────────────────────────────
 for p in EXTRA_PY_PATHS:
     if p and os.path.isdir(p) and p not in sys.path:
@@ -107,66 +110,14 @@ def create_betas_shape_keys(mesh_obj, shapedirs, num_betas=10, beta_values=None)
 
     if beta_values is not None:
         for bi in range(NB):
-            val = float(beta_values[bi])
-            mesh_obj.data.shape_keys.key_blocks[f"Beta_{bi:02d}"].value = val
+            mesh_obj.data.shape_keys.key_blocks[f"Beta_{bi:02d}"].value = float(beta_values[bi])
 
-# --- Pose Application Helpers ---
-def axis_angle_to_blender_tuple(aax):
-    theta = float(np.linalg.norm(aax))
-    if theta < 1e-8:
-        return [0.0, 1.0, 0.0, 0.0]
-    axis = (aax / theta).astype(np.float64)
-    return [theta, float(axis[0]), float(axis[1]), float(axis[2])]
-
-def apply_smpl_pose_to_armature(arm_obj, joint_names, global_orient, body_pose):
-    bpy.context.view_layer.objects.active = arm_obj
-    bpy.ops.object.mode_set(mode='POSE')
-    pb = arm_obj.pose.bones
-
-    # Frame correction for SMPL (Z-forward → Z-up)
-    if FIX_SMPL_FRAME:
-        fix_q = Euler((math.radians(90.0), 0.0, 0.0), 'XYZ').to_quaternion()
-        root_q = axis_angle_to_quaternion(global_orient)
-        root_q = fix_q @ root_q
-        global_orient_tuple = quaternion_to_axis_angle(root_q)
-    else:
-        global_orient_tuple = axis_angle_to_blender_tuple(global_orient)
-
-    if "Pelvis" in pb:
-        pb["Pelvis"].rotation_mode = 'AXIS_ANGLE'
-        pb["Pelvis"].rotation_axis_angle = global_orient_tuple
-
-    body = body_pose.reshape(23, 3)
-    for i in range(23):
-        jname = joint_names[i+1]
-        if jname in pb:
-            pb[jname].rotation_mode = 'AXIS_ANGLE'
-            pb[jname].rotation_axis_angle = axis_angle_to_blender_tuple(body[i])
-
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-def axis_angle_to_quaternion(aax):
-    theta = float(np.linalg.norm(aax))
-    if theta < 1e-8:
-        return Quaternion((1, 0, 0, 0))
-    axis = (aax / theta).astype(np.float64)
-    return Quaternion((math.cos(theta/2.0), *(math.sin(theta/2.0)*axis)))
-
-def quaternion_to_axis_angle(q):
-    q = q.normalized()
-    angle = 2*math.acos(max(min(q.w,1.0),-1.0))
-    s = math.sqrt(max(1 - q.w*q.w, 0.0))
-    if s < 1e-8:
-        return [0.0, 1.0, 0.0, 0.0]
-    return [angle, q.x/s, q.y/s, q.z/s]
-
-# --- FBX Export ---
 def export_fbx(path):
     bpy.ops.export_scene.fbx(
         filepath=path,
         use_selection=False,
         apply_unit_scale=True,
-        bake_space_transform=False,
+        bake_space_transform=False,  # Blender→Blender round-trip
         add_leaf_bones=False,
         armature_nodetype='NULL',
         use_armature_deform_only=True,
@@ -177,56 +128,81 @@ def export_fbx(path):
         axis_up='Z'          # Blender up
     )
 
+def rot_x90_np(verts):
+    """+90° around X (Z-forward → Z-up)."""
+    R = np.array([[1,0,0],
+                  [0,0,-1],
+                  [0,1, 0]], dtype=np.float64)
+    return (verts @ R.T)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
     clear_scene_objects(prefix="SMPL_")
+    col = ensure_collection("SMPL_Collection")
+
     device = torch.device('cpu')
     model = SMPL(model_path=SMPL_MODEL_FOLDER, gender=SMPL_GENDER.lower()).to(device)
     faces = model.faces.astype(np.int32)
 
-    data = np.load(SMPL_PARAMS_FILE, allow_pickle=True)
+    # --- Load params ---
+    if SMPL_PARAMS_FILE.endswith(".npz"):
+        data = np.load(SMPL_PARAMS_FILE, allow_pickle=True)
+    else:
+        import pickle
+        with open(SMPL_PARAMS_FILE, "rb") as f:
+            data = pickle.load(f)
+
     def _get(name, default_shape=None):
-        m = {
+        keys = {
             'betas': ['betas', 'shape', 'betas_numpy'],
             'body_pose': ['body_pose', 'pose_body', 'bodyPose'],
             'global_orient': ['global_orient', 'root_orient', 'pose_root', 'globalOrient'],
             'transl': ['transl', 'translation', 'trans'],
         }[name]
-        for k in m:
+        for k in keys:
             if k in data:
-                arr = np.array(data[k])
-                return np.asarray(arr).reshape(-1)
+                return np.asarray(data[k]).reshape(-1)
+        if default_shape is None:
+            raise KeyError(f"Missing param: {name}")
         return np.zeros(default_shape, dtype=np.float32)
 
     betas = _get('betas', (NUM_BETAS,))
     if betas.shape[0] < NUM_BETAS:
         betas = np.concatenate([betas, np.zeros(NUM_BETAS - betas.shape[0])])
-    betas_t = torch.from_numpy(betas[:NUM_BETAS]).float().unsqueeze(0)
     body_pose = _get('body_pose', (69,))
     global_orient = _get('global_orient', (3,))
     transl = _get('transl', (3,))
+
+    betas_t = torch.from_numpy(betas[:NUM_BETAS]).float().unsqueeze(0)
     body_pose_t = torch.from_numpy(body_pose).float().unsqueeze(0)
     global_orient_t = torch.from_numpy(global_orient).float().unsqueeze(0)
     transl_t = torch.from_numpy(transl * UNIT_SCALE).float().unsqueeze(0)
 
+    # --- SMPL forward: POSED + TRANSLATED verts (this is your original) ---
     with torch.no_grad():
-        out = model(betas=betas_t, body_pose=body_pose_t, global_orient=global_orient_t,
-                    transl=transl_t, pose2rot=True)
+        out = model(
+            betas=betas_t,
+            body_pose=body_pose_t,
+            global_orient=global_orient_t,
+            transl=transl_t,
+            pose2rot=True
+        )
         verts_posed = out.vertices[0].cpu().numpy() * UNIT_SCALE
-        joints_global = out.joints[0].cpu().numpy() * UNIT_SCALE
 
+    # --- REST joints for building a clean T-pose armature ---
     with torch.no_grad():
         out_neutral = model(
             betas=torch.zeros_like(betas_t),
             body_pose=torch.zeros_like(body_pose_t),
             global_orient=torch.zeros_like(global_orient_t),
             transl=torch.zeros_like(transl_t),
-            pose2rot=True)
-        verts_mean = out_neutral.vertices[0].cpu().numpy() * UNIT_SCALE
+            pose2rot=True
+        )
         joints_rest = out_neutral.joints[0].cpu().numpy() * UNIT_SCALE
 
+    # shapedirs & weights
     shapedirs = model.shapedirs
     if shapedirs.dim() == 4 and shapedirs.shape[0] == 1:
         shapedirs = shapedirs[0]
@@ -234,6 +210,12 @@ def main():
     lbs_weights = model.lbs_weights.cpu().numpy()
     J = lbs_weights.shape[1]
 
+    # Optional frame fix applied consistently to posed verts AND rest joints
+    if FIX_SMPL_FRAME:
+        verts_posed  = rot_x90_np(verts_posed)
+        joints_rest  = rot_x90_np(joints_rest)
+
+    # Simple kinematic table (SMPL’s canonical ordering)
     kintree_table = np.vstack([np.concatenate([[-1], np.arange(J-1)]), np.arange(J)])
     joint_names = [
         "Pelvis","L_Hip","R_Hip","Spine1","L_Knee","R_Knee","Spine2","L_Ankle","R_Ankle",
@@ -243,13 +225,16 @@ def main():
     if J != len(joint_names):
         joint_names = [f"J{i}" for i in range(J)]
 
-    col = ensure_collection("SMPL_Collection")
-    mesh_obj = np_to_bmesh_object("SMPL_Mesh", verts_mean, faces)
+    # ── Build objects in Blender (BAKED POSE) ────────────────────────────────
+    mesh_obj = np_to_bmesh_object("SMPL_Mesh", verts_posed, faces)   # ← posed verts!
+    mesh_obj.location = (0.0, 0.0, 0.0)
     col.objects.link(mesh_obj)
 
     arm_obj = create_armature("SMPL_Armature", joint_names, joints_rest, kintree_table)
+    arm_obj.location = (0.0, 0.0, 0.0)
     col.objects.link(arm_obj)
 
+    # Skin & parent (no extra transforms)
     add_armature_modifier(mesh_obj, arm_obj)
     mesh_obj.select_set(True)
     arm_obj.select_set(True)
@@ -258,13 +243,16 @@ def main():
     mesh_obj.select_set(False)
     arm_obj.select_set(False)
 
+    # Weights + shape keys (approximate around posed base)
     add_vertex_groups_and_weights(mesh_obj, joint_names, lbs_weights)
     create_betas_shape_keys(mesh_obj, shapedirs_np, num_betas=NUM_BETAS, beta_values=betas)
 
-    apply_smpl_pose_to_armature(arm_obj, joint_names, global_orient, body_pose)
-    arm_obj.location = Vector((float(transl[0]), float(transl[1]), float(transl[2])))
+    # IMPORTANT: do NOT apply any pose/rotations to bones (prevents double-deform)
+    # Armature stays T-pose at origin; the mesh already contains your original pose+transl.
 
     bpy.context.view_layer.update()
+
+    # ── Export FBX ───────────────────────────────────────────────────────────
     export_fbx(OUTPUT_FBX)
     print(f"[OK] Exported FBX to: {OUTPUT_FBX}")
 
