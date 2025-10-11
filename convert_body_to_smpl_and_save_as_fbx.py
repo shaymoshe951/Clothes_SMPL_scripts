@@ -341,6 +341,20 @@ def select_smpl_mesh(fbx_temp_obj):
 
     return mesh, armature
 
+def export_fbx(fbx_output_filename):
+    bpy.ops.export_scene.fbx(
+        filepath=fbx_output_filename,
+        use_selection=False,
+        apply_unit_scale=True,
+        bake_space_transform=False,  # Blender→Blender round-trip
+        add_leaf_bones=False,
+        armature_nodetype='NULL',
+        use_armature_deform_only=False,
+        mesh_smooth_type='FACE',
+        use_mesh_modifiers=False,
+        apply_scale_options='FBX_SCALE_ALL',
+    )
+    print(f"[OK] Exported FBX to: {fbx_output_filename}")
 
 # Main workflow
 if __name__ == "__main__":
@@ -369,6 +383,8 @@ if __name__ == "__main__":
     armature_obj.location = Vector(params['transl'].cpu().numpy())
 
     bpy.context.view_layer.update()
+
+    export_fbx(OUTPUT_FBX)
 
     print("Done!")
 
