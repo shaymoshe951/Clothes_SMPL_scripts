@@ -1,5 +1,6 @@
 import bpy
 import os
+from math import radians
 
 # ──────────────────────────────────────────────────────────────
 # USER CONFIGURATION
@@ -11,6 +12,8 @@ FBX_BODY_PATH = OUTPUT_FBX          # Path to SMPL FBX
 OBJ_GARMENT_PATH = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_garment_modified.obj"         # Path to garment OBJ
 ADD_CLOTH_SIMULATION = True                         # Set False for only rigging
 GARMENT_SCALE = 0.01                                # Scale factor for garment
+GARMENT_AXIS_FIX_X_DEG = -90.0   # rotate garment by -90° around X to convert Y-up → Z-up
+ALIGN_GARMENT_TO_BODY  = True    # also copy body location/rotation to garment
 
 # ──────────────────────────────────────────────────────────────
 
@@ -79,6 +82,26 @@ def import_models():
         )
     else:
         raise FileNotFoundError(OBJ_GARMENT_PATH)
+
+def fix_axis_and_align_garment(garment, body, rot_x_deg=-90.0, align=True):
+    """Rotate garment around X to convert Y-up→Z-up, then align to body pose/origin."""
+    ensure_object_mode()
+    # Axis fix first (before scaling/weighting)
+    deselect_all()
+    garment.select_set(True)
+    bpy.context.view_layer.objects.active = garment
+
+    # Rotate around local X
+    garment.rotation_euler.rotate_axis('X', radians(rot_x_deg))
+    # Apply rotation so downstream steps see clean transforms
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+
+    if align:
+        # Copy world-space rotation & location from body so they sit together
+        garment.rotation_euler = body.rotation_euler.copy()
+        garment.location = body.location.copy()
+        # (Don't copy scale; we manage garment scale separately)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
 
 
 def get_objects():
@@ -213,6 +236,14 @@ def main():
 
     # Apply transforms
     apply_transforms(body)
+
+    # Fix OBJ axis (Y-up → Z-up) and align to body
+    fix_axis_and_align_garment(
+        garment,
+        body,
+        rot_x_deg=GARMENT_AXIS_FIX_X_DEG,
+        align=ALIGN_GARMENT_TO_BODY
+    )
 
     # Scale garment (e.g. 0.01)
     scale_garment(garment, GARMENT_SCALE)
