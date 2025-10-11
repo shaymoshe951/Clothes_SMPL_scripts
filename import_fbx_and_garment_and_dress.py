@@ -6,7 +6,7 @@ import os
 # ──────────────────────────────────────────────────────────────
 # Input paths
 FBX_BODY_PATH        = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m_fix.fbx"
-OBJ_GARMENT_PATH  = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_garment_modified.obj"
+OBJ_GARMENT_PATH  = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_garment_modified_rot_scaled.obj"
 
 # Canonical object names to assign after import
 CANON_ARMATURE_NAME = "Armature"
@@ -18,12 +18,8 @@ CANON_COLL_RIG     = "Rig"
 CANON_COLL_BODY    = "Body"
 CANON_COLL_GARMENT = "Garment"
 
-# OBJ axis config (use instead of post-import rotation)
-GARMENT_IMPORT_FORWARD = "NEGATIVE_Y"
-GARMENT_IMPORT_UP      = "NEGATIVE_Z"
-
 # Fixed garment scaling
-GARMENT_SCALE = 0.01
+GARMENT_SCALE = 1.0
 
 # Simulation toggles & tunables
 ADD_CLOTH_SIMULATION = True
@@ -187,8 +183,6 @@ def import_models():
     before = set(bpy.data.objects)
     bpy.ops.wm.obj_import(
         filepath=OBJ_GARMENT_PATH,
-        forward_axis=GARMENT_IMPORT_FORWARD,
-        up_axis=GARMENT_IMPORT_UP,
         validate_meshes=True
         # split_mode='OFF',  # uncomment if you want one object (when supported by exporter)
     )
@@ -231,13 +225,34 @@ def transfer_weights_with_modifier(body, garment):
     mod.use_object_transform = True
     mod.use_vert_data = True
     mod.data_types_verts = {'VGROUP_WEIGHTS'}
-    mod.vert_mapping = 'NEAREST'            # try 'NEAREST_FACE_INTERPOLATED' for smoother mapping
-    mod.layers_vgroup_select_src = 'ALL'    # ACTIVE | ALL
-    mod.layers_vgroup_select_dst = 'NAME'   # NAME | INDEX
+
+    # Prefer face-interpolated mapping (smoother & less "grabbing" through the mesh)
+    try:
+        mod.vert_mapping = 'POLYINTERP_NEAREST'   # face-interpolated nearest
+    except:
+        mod.vert_mapping = 'NEAREST'              # fallback
+
+    # Optional: limit search radius to avoid distant matches through the body
+    if hasattr(mod, "use_max_distance"):
+        mod.use_max_distance = True
+        mod.max_distance = 0.02   # 2 cm in meter units; adjust if your scale differs
+
+    # Destination matching by name
+    mod.layers_vgroup_select_src = 'ALL'
+    mod.layers_vgroup_select_dst = 'NAME'
     mod.mix_mode = 'REPLACE'
     mod.mix_factor = 1.0
 
     bpy.ops.object.modifier_apply(modifier=mod.name)
+
+    # Post-process weights: normalize + limit influences
+    try:
+        bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+        bpy.ops.object.vertex_group_limit_total(limit=4)
+        bpy.ops.object.vertex_group_clean(group_select_mode='ALL', limit=1e-6)
+    except:
+        pass
+
     print("✅ Weights transferred (modifier applied).\n")
 
 def parent_to_armature(armature, garment):
@@ -254,6 +269,13 @@ def parent_to_armature(armature, garment):
         if mod is None:
             mod = garment.modifiers.new(name="Armature", type='ARMATURE')
         mod.object = armature
+        mod = next((m for m in garment.modifiers if m.type == 'ARMATURE'), None)
+        if mod is None:
+            mod = garment.modifiers.new(name="Armature", type='ARMATURE')
+        mod.object = armature
+        if hasattr(mod, "use_deform_preserve_volume"):
+            mod.use_deform_preserve_volume = True
+
     print("✅ Parent/Armature set.\n")
 
 
