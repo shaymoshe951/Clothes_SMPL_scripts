@@ -162,37 +162,42 @@ def setup_cloth_simulation(garment, body):
     print("🧶 Adding cloth simulation and collision ...")
     ensure_object_mode()
 
-    # Add cloth to garment
+    # ── Cloth on garment
     cloth_mod = garment.modifiers.new("ClothSim", 'CLOTH')
-
-    # Core cloth settings (bend/air/etc. live on cloth_mod.settings if you need them)
     cloth = cloth_mod.settings
     cloth.quality = 10
     cloth.use_pressure = False
 
-    # ▶ Collisions for the cloth modifier (correct place in 4.5)
+    # Cloth collision settings (modifier-level)
     coll = cloth_mod.collision_settings
-    coll.collision_quality = 4            # iterations
-    coll.use_collision = True             # collide with other objects
-    coll.distance_min = 0.003             # object↔cloth gap
-    coll.use_self_collision = True        # self collisions on
-    coll.self_distance_min = 0.002        # cloth↔cloth gap
+    coll.collision_quality = 4
+    coll.use_collision = True
+    coll.distance_min = 0.003          # object ↔ cloth gap
+    coll.use_self_collision = True
+    coll.self_distance_min = 0.002     # cloth ↔ cloth gap
     coll.friction = 5.0
     coll.self_friction = 5.0
     coll.impulse_clamp = 0.0
     coll.self_impulse_clamp = 0.0
 
-    # ▶ Enable the body as a collider (Collision physics)
-    # This adds/ensures a Collision settings block on the mesh object.
-    if not hasattr(body, "collision"):
-        body.modifiers.new("Collision", 'COLLISION')
+    # ── Enable the BODY as a collider (physics Collision block)
+    # Make body active for the operator to affect it
+    deselect_all()
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+
+    # If the Collision physics block doesn't exist yet, create it
+    if body.collision is None:
+        bpy.ops.object.modifier_add(type='COLLISION')  # creates body.collision
+
+    # Now safe to access body.collision
     body.collision.use = True
     body.collision.thickness_outer = 0.003
     body.collision.thickness_inner = 0.003
-    # Optional collider tweaks:
+    # Optional:
+    # body.collision.cloth_friction = 5.0
     # body.collision.use_normal = True
     # body.collision.use_culling = False
-    # body.collision.cloth_friction = 5.0
 
     print("✅ Cloth & collisions configured for Blender 4.5 API.")
 
