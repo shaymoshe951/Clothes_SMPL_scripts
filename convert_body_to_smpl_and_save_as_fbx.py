@@ -14,7 +14,7 @@ import torch
 from smplx import SMPL
 import trimesh
 import math
-from mathutils import Vector
+from mathutils import Quaternion, Vector
 import numpy as np
 import bpy
 
@@ -71,31 +71,6 @@ def axis_angle_to_rot_mat(aa):
     return R
 
 
-def set_blender_shape_keys(obj, shape_key_values):
-    """
-    Set the computed values on the object's shape keys.
-
-    Args:
-        obj (bpy.types.Object): The SMPL mesh object with 218 shape keys
-        shape_key_values (torch.Tensor): Values from compute_smpl_shape_key_values
-    """
-    if obj.type != 'MESH' or not obj.data.shape_keys:
-        print("Error: Object must be a mesh with shape keys.")
-        return
-
-    shape_keys = obj.data.shape_keys.key_blocks
-    if len(shape_keys) != 218:
-        print(f"Warning: Expected 218 shape keys, found {len(shape_keys)}.")
-        return
-
-    # Set values (convert to float)
-    for i, key in enumerate(shape_keys):
-        key.value = shape_key_values[i].item()
-
-    # Update view layer
-    bpy.context.view_layer.update()
-    print(f"Updated {len(shape_keys)} shape keys on {obj.name}")
-
 def compute_smpl_shape_key_values(betas, body_pose, global_orient, transl, device='cpu'):
     """
     Compute the 218 shape key values for an SMPL mesh based on the input parameters.
@@ -116,8 +91,6 @@ def compute_smpl_shape_key_values(betas, body_pose, global_orient, transl, devic
     """
     betas = betas.to(device)
     body_pose = body_pose.to(device)
-    global_orient = global_orient.to(device)
-    transl = transl.to(device)
 
     num_pose_keys = 207  # 9 * 23 joints
     num_shape_keys = 10
@@ -126,34 +99,99 @@ def compute_smpl_shape_key_values(betas, body_pose, global_orient, transl, devic
     values = torch.zeros(total_keys, device=device)
     values[0] = 1.0  # Basis always active
 
-    # Shape blend shapes: direct copy of betas
+    # Shape keys: betas
     values[1:1 + num_shape_keys] = betas
 
-    # Pose corrective coefficients: vec(R(θ_local) - I) for local body joints
-    num_joints = 23
-    theta_local = body_pose.view(num_joints, 3)  # (23, 3)
+    # Pose correctives: vec(R(theta_local) - I) for 23 local joints (body_pose)
+    num_joints_local = 23
+    theta_local = body_pose.view(num_joints_local, 3)
 
-    # Identity vector for one rotation matrix: [1,0,0, 0,1,0, 0,0,1]
     identity_vec = torch.tensor([1., 0., 0., 0., 1., 0., 0., 0., 1.], device=device)
 
-    # Compute flattened rotation vectors
     rot_vecs = []
-    for i in range(num_joints):
-        axis_angle = theta_local[i]
-        rot_mat = axis_angle_to_rot_mat(axis_angle)
-        rot_vec = rot_mat.view(-1)  # Flatten to 9 elements
+    for i in range(num_joints_local):
+        rot_mat = axis_angle_to_rot_mat(theta_local[i])
+        rot_vec = rot_mat.view(-1)
         rot_vecs.append(rot_vec)
 
-    rot_vecs = torch.stack(rot_vecs).view(-1)  # (207,)
-
-    # Subtract identity (repeated for all joints)
-    identity_all = identity_vec.repeat(num_joints)  # (207,)
+    rot_vecs = torch.stack(rot_vecs).view(-1)  # 207
+    identity_all = identity_vec.repeat(num_joints_local)
     pose_coeffs = rot_vecs - identity_all
 
-    # Assign to pose corrective shape keys
     values[1 + num_shape_keys:] = pose_coeffs
+
     return values
 
+def set_blender_shape_keys(obj, shape_key_values):
+    """
+    Set the computed values on the object's shape keys.
+
+    Args:
+        obj (bpy.types.Object): The SMPL mesh object with 218 shape keys
+        shape_key_values (torch.Tensor): Values from compute_smpl_shape_key_values
+    """
+    if obj.type != 'MESH' or not obj.data.shape_keys:
+        print("Error: Object must be a mesh with shape keys.")
+        return
+
+    shape_keys = obj.data.shape_keys.key_blocks
+    if len(shape_keys) != 218:
+        print(f"Warning: Expected 218 keys, found {len(shape_keys)}.")
+        return
+
+    for i, key in enumerate(shape_keys):
+        key.value = float(shape_key_values[i])
+
+    bpy.context.view_layer.update()
+    print(f"Updated {len(shape_keys)} shape keys on {obj.name}")
+
+
+def set_smpl_pose_on_armature(armature, global_orient, body_pose, device='cpu'):
+    """
+    Set bone rotations on the armature using full pose (global + body).
+    Assumes standard SMPL joint order and bone names.
+    """
+    if armature.type != 'ARMATURE':
+        print("Error: Object must be an armature.")
+        return
+
+    # Standard SMPL joint names (adjust if your import uses prefixes like 'mixamorig:')
+    joint_names = [
+        'pelvis', 'left_hip', 'right_hip', 'spine1', 'left_knee', 'right_knee',
+        'spine2', 'left_ankle', 'right_ankle', 'spine3', 'left_foot', 'right_foot',
+        'neck', 'left_collar', 'right_collar', 'head', 'left_shoulder', 'right_shoulder',
+        'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hand', 'right_hand'
+    ]
+
+    # Full theta: global (root) + body_pose (23 locals)
+    theta_full = torch.cat([global_orient.to(device), body_pose.to(device)]).view(24, 3)
+
+    # Switch to Pose Mode
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='POSE')
+
+    # Clear existing rotations (optional: armature.pose_library.reset())
+    for bone in armature.pose.bones:
+        bone.rotation_quaternion = Quaternion((1, 0, 0, 0))
+
+    # Set per-bone rotations
+    success_count = 0
+    for i, joint_name in enumerate(joint_names):
+        if joint_name in [b.name for b in armature.pose.bones]:
+            bone = armature.pose.bones[joint_name]
+            aa = theta_full[i].cpu().numpy()  # To numpy for mathutils
+            if torch.norm(torch.tensor(aa)) > 1e-6:  # Non-zero rotation
+                R = axis_angle_to_rot_mat(torch.tensor(aa, device=device)).cpu().numpy()
+                quat = Quaternion(
+                    (R[0, 0], R[0, 1], R[0, 2], R[1, 0], R[1, 1], R[1, 2], R[2, 0], R[2, 1], R[2, 2]))  # From matrix
+                bone.rotation_quaternion = quat
+                success_count += 1
+        else:
+            print(f"Warning: Bone '{joint_name}' not found.")
+
+    bpy.ops.object.mode_set(mode='OBJECT')  # Back to Object Mode
+    bpy.context.view_layer.update()
+    print(f"Set rotations for {success_count}/24 bones.")
 
 def fit_smpl_to_obj(obj_path, smpl_model_path, gender, device, scale_factor=1.0):
     """Fit SMPL parameters to an OBJ mesh with optional scaling"""
@@ -271,21 +309,17 @@ def select_smpl_mesh(fbx_temp_obj):
 
     # Get the child mesh by name
     mesh_name = "SMPL-mesh-female"
+    armature_name = "SMPL-female"
     mesh = next((child for child in obj.children if child.name == mesh_name), None)
+    armature = next((child for child in obj.children if child.name == armature_name), None)
 
     if mesh:
         print(f"Found mesh child: {mesh.name} (type: {mesh.type})")
-        # Now use 'mesh' for further operations, e.g., make_rigid(mesh)
-    else:
-        print(f"Error: No child named '{mesh_name}' found under {obj.name}.")
-        # Fallback: Search entire scene (in case not direct child)
-        mesh = bpy.data.objects.get(mesh_name)
-        if mesh:
-            print(f"Found mesh in scene: {mesh.name}")
-        else:
-            print(f"Error: '{mesh_name}' not found anywhere.")
 
-    return mesh
+    if armature:
+        print(f"Found armature child: {armature.name} (type: {armature.type})")
+
+    return mesh, armature
 
 
 # Main workflow
@@ -305,8 +339,14 @@ if __name__ == "__main__":
     shape_key_values = compute_smpl_shape_key_values(params['betas'], params['body_pose'],
                                                      params['global_orient'], params['transl'], device=DEVICE)
 
-    mesh_obj = select_smpl_mesh(fbx_temp_obj)
+    mesh_obj, armature_obj = select_smpl_mesh(fbx_temp_obj)
     set_blender_shape_keys(mesh_obj, shape_key_values)
+
+    # Set bone poses
+    set_smpl_pose_on_armature(armature_obj, params['global_orient'], params['body_pose'], DEVICE)
+
+    # Apply translation (to armature or mesh; here to armature)
+    armature_obj.location = Vector(params['transl'].cpu().numpy())
 
     bpy.context.view_layer.update()
 
