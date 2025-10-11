@@ -156,7 +156,7 @@ if __name__ == "__main__":
     )
 
     # Save parameters
-    np.savez(obj_path.replace('.obj', '_params.npz'), **params)
+    # np.savez(obj_path.replace('.obj', '_params.npz'), **params)
 
     # Save with controls
     # fbx_path = obj_path.replace('.obj', '_with_rig.fbx')
