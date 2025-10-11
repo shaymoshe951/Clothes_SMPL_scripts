@@ -14,8 +14,14 @@ GARMENT_SCALE = 0.01                                # Scale factor for garment
 
 # ──────────────────────────────────────────────────────────────
 
+def ensure_object_mode():
+    if bpy.context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
 
 def clear_scene():
+    ensure_object_mode()
+
     """Remove all existing objects, collections, and data blocks."""
     print("🧹 Clearing current Blender scene...")
 
@@ -97,6 +103,8 @@ def get_objects():
 
 
 def apply_transforms(obj):
+    ensure_object_mode()
+
     deselect_all()
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -105,6 +113,8 @@ def apply_transforms(obj):
 
 def scale_garment(garment, scale_factor):
     print(f"📏 Scaling garment by {scale_factor} ...")
+    ensure_object_mode()
+
     deselect_all()
     garment.select_set(True)
     bpy.context.view_layer.objects.active = garment
@@ -115,24 +125,31 @@ def scale_garment(garment, scale_factor):
 
 def transfer_weights(body, garment):
     print("🎨 Transferring weights from body → garment ...")
+    ensure_object_mode()
     deselect_all()
+
+    # Active = SOURCE (body), Selected non-active = DESTINATION (garment)
     garment.select_set(True)
     body.select_set(True)
     bpy.context.view_layer.objects.active = body
+
     bpy.ops.object.data_transfer(
-        use_reverse_transfer=True,
         data_type='VGROUP_WEIGHTS',
         vert_mapping='NEAREST',
         layers_select_src='NAME',
         layers_select_dst='ALL',
         use_auto_transform=True,
-        use_create=True
+        use_create=True,
+        use_reverse_transfer=False  # ← IMPORTANT
     )
     print("✅ Weights transferred.\n")
 
 
+
 def parent_to_armature(armature, garment):
     print("🔗 Parenting garment to armature ...")
+    ensure_object_mode()
+
     deselect_all()
     garment.select_set(True)
     armature.select_set(True)
@@ -143,6 +160,7 @@ def parent_to_armature(armature, garment):
 
 def setup_cloth_simulation(garment, body):
     print("🧶 Adding cloth simulation and collision ...")
+    ensure_object_mode()
 
     # Add cloth to garment
     cloth_mod = garment.modifiers.new("ClothSim", 'CLOTH')
