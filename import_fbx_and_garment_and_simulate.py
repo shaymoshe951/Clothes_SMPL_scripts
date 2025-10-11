@@ -5,12 +5,15 @@ from math import radians
 
 FBX_BODY_PATH = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_no_smpl.fbx"
 AUTOMATIC_BONE_ORIENTATION = False
+OBJ_GARMENT_PATH  = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_garment_modified_rot_scaled.obj"
 
 
 def ensure_object_mode():
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
+def deselect_all():
+    bpy.ops.object.select_all(action='DESELECT')
 
 def clear_scene():
     ensure_object_mode()
@@ -61,6 +64,40 @@ def import_and_rotate_body():
     rot_obj(obj, 'X', 90)
     return obj
 
+def import_and_rotate_garment():
+    if not os.path.exists(OBJ_GARMENT_PATH):
+        raise FileNotFoundError(OBJ_GARMENT_PATH)
+    print(f"📂 Importing OBJ garment from {OBJ_GARMENT_PATH} ...")
+    ensure_object_mode()
+
+    # --- Import OBJ (garment) with axis settings ---
+    if not hasattr(bpy.ops.wm, "obj_import"):
+        raise RuntimeError("This Blender build lacks 'bpy.ops.wm.obj_import' (OBJ importer).")
+    before = set(bpy.data.objects)
+    bpy.ops.wm.obj_import(
+        filepath=OBJ_GARMENT_PATH,
+        validate_meshes=True
+        # split_mode='OFF',  # uncomment if you want one object (when supported by exporter)
+    )
+    after = set(bpy.data.objects)
+    new_obj = [o for o in (after - before) if o.type == 'MESH']
+    if not new_obj:
+        raise RuntimeError("OBJ import: no MESH objects found for garment.")
+
+    # If multiple meshes came in, join into one garment
+    if len(new_obj) > 1:
+        deselect_all()
+        for o in new_obj:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = new_obj[0]
+        bpy.ops.object.join()
+        garment = new_obj[0]
+    else:
+        garment = new_obj[0]
+
+    rot_obj(garment, 'X', 90)
+    return garment
+
 
 def make_rigid(obj):
     if not obj:
@@ -74,7 +111,7 @@ def make_rigid(obj):
         return
 
     # Deselect all first
-    bpy.ops.object.select_all(action='DESELECT')
+    deselect_all()
 
     # Set selection and active (ensures context for mode_set)
     obj.select_set(True)
@@ -113,12 +150,12 @@ def make_rigid(obj):
     #
     print(f"Collision modifier added to {obj.name}. Properties tab switched to Physics.")
 
-
 # ----------------------------- MAIN -----------------------------
 def main():
     clear_scene()
     body = import_and_rotate_body()
     make_rigid(body)
+    garment = import_and_rotate_garment()
 
     print("🎉 Complete! play the sim to test.")
 
