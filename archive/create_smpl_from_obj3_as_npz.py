@@ -173,15 +173,15 @@ def main():
     print(f"[Params] Saved: {npz_path}")
 
     # 3) Export reusable SMPL assets (for Blender NumPy-only pipeline)
-    export_smpl_assets(smpl_model, OUT_DIR)
+    # export_smpl_assets(smpl_model, OUT_DIR)
 
     # 4) (Optional) Save the fitted mesh OBJ for inspection
-    try:
-        fitted_mesh_path = os.path.join(OUT_DIR, "fitted_mesh.obj")
-        trimesh.Trimesh(fitted_vertices, faces).export(fitted_mesh_path)
-        print(f"[Mesh] Saved fitted mesh: {fitted_mesh_path}")
-    except Exception as e:
-        print(f"Could not save fitted OBJ (ok to ignore): {e}")
+    # try:
+    #     fitted_mesh_path = os.path.join(OUT_DIR, "fitted_mesh.obj")
+    #     trimesh.Trimesh(fitted_vertices, faces).export(fitted_mesh_path)
+    #     print(f"[Mesh] Saved fitted mesh: {fitted_mesh_path}")
+    # except Exception as e:
+    #     print(f"Could not save fitted OBJ (ok to ignore): {e}")
 
 
 if __name__ == "__main__":

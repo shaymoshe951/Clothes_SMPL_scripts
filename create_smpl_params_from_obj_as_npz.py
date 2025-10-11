@@ -159,9 +159,9 @@ if __name__ == "__main__":
     np.savez(obj_path.replace('.obj', '_params.npz'), **params)
 
     # Save with controls
-    fbx_path = obj_path.replace('.obj', '_with_rig.fbx')
-    script_path = save_fbx_with_smpl_controls(
-        fitted_vertices, faces, params, fbx_path,
-        smpl_addon_path=r"C:\Users\Lab\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\smpl_blender_addon"  # Update this!
-    )
+    # fbx_path = obj_path.replace('.obj', '_with_rig.fbx')
+    # script_path = save_fbx_with_smpl_controls(
+    #     fitted_vertices, faces, params, fbx_path,
+    #     smpl_addon_path=r"C:\Users\Lab\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\smpl_blender_addon"  # Update this!
+    # )
 
