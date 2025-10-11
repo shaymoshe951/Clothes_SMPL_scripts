@@ -20,7 +20,7 @@ CANON_COLL_GARMENT = "Garment"
 
 # OBJ axis config (use instead of post-import rotation)
 GARMENT_IMPORT_FORWARD = "NEGATIVE_Y"
-GARMENT_IMPORT_UP      = "Z"
+GARMENT_IMPORT_UP      = "NEGATIVE_Z"
 
 # Fixed garment scaling
 GARMENT_SCALE = 0.01
@@ -135,20 +135,20 @@ def apply_transforms(obj, loc=True, rot=True, scale=True):
 def clear_scene():
     ensure_object_mode()
     print("🧹 Clearing current Blender scene...")
+
+    # Delete objects (safe: updates deps/refs)
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
-    # Remove orphans
-    for block_type in [
-        bpy.data.meshes, bpy.data.armatures, bpy.data.materials, bpy.data.textures,
-        bpy.data.images, bpy.data.curves, bpy.data.lights, bpy.data.cameras, bpy.data.collections,
-    ]:
-        for block in list(block_type):
-            try:
-                block.user_clear()
-                block_type.remove(block)
-            except:
-                pass
+
+    # Purge orphans (safe: Blender-managed)
+    for _ in range(2):
+        try:
+            bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+        except Exception:
+            pass
+
     print("✅ Scene cleared.\n")
+
 
 def import_models():
     """Import FBX (body+rig) and OBJ (garment), assign canonical names/collections, and return refs."""
