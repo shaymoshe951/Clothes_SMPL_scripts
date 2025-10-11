@@ -98,10 +98,9 @@ def import_and_rotate_garment():
     rot_obj(garment, 'X', 90)
     return garment
 
-
-def make_rigid(obj):
+def select_obj(obj):
     if not obj:
-        print("Error: No object provided to make_rigid!")
+        print("Error: No object provided!")
         return
 
     # Ensure obj is in the current view layer
@@ -124,7 +123,10 @@ def make_rigid(obj):
         print(f"Mode switch failed: {e}. Attempting fallback...")
         if bpy.context.mode != 'OBJECT':
             print("Warning: Could not switch to Object Mode. Ensure object is valid.")
-            return
+    return
+
+def add_obj_modifier(obj, mod_type_name='COLLISION'):
+    select_obj(obj)
 
     # Safely switch Properties editor to Physics context
     physics_context_set = False
@@ -141,14 +143,23 @@ def make_rigid(obj):
         # But avoid auto-splitting unless desired
 
     # Add the Collision modifier
-    bpy.ops.object.modifier_add(type='COLLISION')
+    bpy.ops.object.modifier_add(type=mod_type_name)
 
     # Optional: Configure the modifier
     mod = obj.modifiers[-1]
+    return mod
+
+def make_rigid(obj):
+    mod = add_obj_modifier(obj, 'COLLISION')
     #    mod.name = "CollisionRigid"
     #    mod.settings.thickness_outer = 0.04  # Adjust as needed
     #
     print(f"Collision modifier added to {obj.name}. Properties tab switched to Physics.")
+
+def make_garment(obj):
+    mod = add_obj_modifier(obj, 'CLOTH')
+    print(f"CLOTH modifier added to {obj.name}. Properties tab switched to Physics.")
+
 
 # ----------------------------- MAIN -----------------------------
 def main():
@@ -156,6 +167,7 @@ def main():
     body = import_and_rotate_body()
     make_rigid(body)
     garment = import_and_rotate_garment()
+    make_garment(garment)
 
     print("🎉 Complete! play the sim to test.")
 
