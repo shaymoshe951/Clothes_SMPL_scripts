@@ -136,15 +136,15 @@ def transfer_weights(body, garment):
     bpy.ops.object.data_transfer(
         data_type='VGROUP_WEIGHTS',
         vert_mapping='NEAREST',
-        layers_select_src='NAME',
-        layers_select_dst='ALL',
+        layers_select_src='ALL',   # ✅ ACTIVE | ALL
+        layers_select_dst='NAME',  # ✅ NAME | INDEX
         use_auto_transform=True,
         use_create=True,
-        use_reverse_transfer=False  # ← IMPORTANT
+        mix_mode='REPLACE',
+        mix_factor=1.0,
+        use_reverse_transfer=False
     )
     print("✅ Weights transferred.\n")
-
-
 
 def parent_to_armature(armature, garment):
     print("🔗 Parenting garment to armature ...")
