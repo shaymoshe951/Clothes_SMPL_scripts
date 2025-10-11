@@ -59,15 +59,66 @@ def import_and_rotate_body():
 
     obj = new_fbx[0]
     rot_obj(obj, 'X', 90)
-    print(f"✅ FBX body imported and rotated.\n")
     return obj
+
+
+def make_rigid(obj):
+    if not obj:
+        print("Error: No object provided to make_rigid!")
+        return
+
+    # Ensure obj is in the current view layer
+    view_layer = bpy.context.view_layer
+    if obj.name not in [o.name for o in view_layer.objects]:
+        print(f"Error: {obj.name} not in current view layer!")
+        return
+
+    # Deselect all first
+    bpy.ops.object.select_all(action='DESELECT')
+
+    # Set selection and active (ensures context for mode_set)
+    obj.select_set(True)
+    view_layer.objects.active = obj
+
+    # Now safely switch to Object Mode
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except RuntimeError as e:
+        print(f"Mode switch failed: {e}. Attempting fallback...")
+        if bpy.context.mode != 'OBJECT':
+            print("Warning: Could not switch to Object Mode. Ensure object is valid.")
+            return
+
+    # Safely switch Properties editor to Physics context
+    physics_context_set = False
+    for area in bpy.context.screen.areas:
+        if area.type == 'PROPERTIES':
+            area.spaces.active.context = 'PHYSICS'
+            physics_context_set = True
+            break
+
+    if not physics_context_set:
+        print("Warning: No Properties editor found. Physics tab won't switch, but modifier still adds.")
+        # Optional: Create a Properties area if needed (splits the active screen)
+        # bpy.ops.screen.area_split(direction='RIGHT', factor=0.3)
+        # But avoid auto-splitting unless desired
+
+    # Add the Collision modifier
+    bpy.ops.object.modifier_add(type='COLLISION')
+
+    # Optional: Configure the modifier
+    mod = obj.modifiers[-1]
+    #    mod.name = "CollisionRigid"
+    #    mod.settings.thickness_outer = 0.04  # Adjust as needed
+    #
+    print(f"Collision modifier added to {obj.name}. Properties tab switched to Physics.")
 
 
 # ----------------------------- MAIN -----------------------------
 def main():
     clear_scene()
     body = import_and_rotate_body()
-
+    make_rigid(body)
 
     print("🎉 Complete! play the sim to test.")
 
