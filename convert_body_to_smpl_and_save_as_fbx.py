@@ -3,6 +3,7 @@
 # ──────────────────────────────────────────────────────────────────────────────
 import sys
 import os
+
 EXTRA_PY_PATHS = [r"C:\Users\Lab\AppData\Roaming\Python\Python311\Scripts" + "\\..\\site-packages"]
 for p in EXTRA_PY_PATHS:
     if p and os.path.isdir(p) and p not in sys.path:
@@ -20,8 +21,8 @@ import bpy
 # ---------- Config ----------
 OBJ_BODY_PATH = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_modified.obj"
 SMPL_MODEL_PATH = r"D:\projects\ClProjects\SMPL_Model"  # Download from SMPL website
-SMPL_GENDER       = "FEMALE"  # "MALE" | "FEMALE" | "NEUTRAL"
-OUTPUT_FBX        = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m2.fbx"
+SMPL_GENDER = "FEMALE"  # "MALE" | "FEMALE" | "NEUTRAL"
+OUTPUT_FBX = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m2.fbx"
 FBX_TEMPLATE_PATH_N_PREFIX = r"C:\Users\Lab\Downloads\template_smpl_"
 
 SCALE_FACTOR = 0.01  # scales your input OBJ vertices before fitting
@@ -151,6 +152,8 @@ def compute_smpl_shape_key_values(betas, body_pose, global_orient, transl, devic
 
     # Assign to pose corrective shape keys
     values[1 + num_shape_keys:] = pose_coeffs
+    return values
+
 
 def fit_smpl_to_obj(obj_path, smpl_model_path, gender, device, scale_factor=1.0):
     """Fit SMPL parameters to an OBJ mesh with optional scaling"""
@@ -209,12 +212,15 @@ def fit_smpl_to_obj(obj_path, smpl_model_path, gender, device, scale_factor=1.0)
     # return params, output.vertices[0].detach().cpu().numpy(), mesh.faces
     return smpl, params
 
+
 def ensure_object_mode():
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
+
 def deselect_all():
     bpy.ops.object.select_all(action='DESELECT')
+
 
 def clear_scene():
     ensure_object_mode()
@@ -233,6 +239,7 @@ def clear_scene():
 
     print("✅ Scene cleared.\n")
 
+
 def ensure_collection(col_name):
     if col_name in bpy.data.collections:
         col = bpy.data.collections[col_name]
@@ -240,6 +247,7 @@ def ensure_collection(col_name):
         col = bpy.data.collections.new(col_name)
         bpy.context.scene.collection.children.link(col)
     return col
+
 
 def import_fbx(fbx_file_name):
     if not os.path.exists(fbx_file_name):
@@ -257,10 +265,13 @@ def import_fbx(fbx_file_name):
     obj = new_fbx[0]
     return obj
 
+
 def select_smpl_mesh(fbx_temp_obj):
+    obj = bpy.data.objects["SMPL-female"]  # Or however you have it
+
     # Get the child mesh by name
     mesh_name = "SMPL-mesh-female"
-    mesh = next((child for child in fbx_temp_obj.children if child.name == mesh_name), None)
+    mesh = next((child for child in obj.children if child.name == mesh_name), None)
 
     if mesh:
         print(f"Found mesh child: {mesh.name} (type: {mesh.type})")
@@ -274,25 +285,30 @@ def select_smpl_mesh(fbx_temp_obj):
         else:
             print(f"Error: '{mesh_name}' not found anywhere.")
 
+    return mesh
+
+
 # Main workflow
 if __name__ == "__main__":
     # Fit SMPL
     model, params = fit_smpl_to_obj(
         OBJ_BODY_PATH, SMPL_MODEL_PATH,
-        gender=SMPL_GENDER,device=DEVICE , scale_factor=SCALE_FACTOR
+        gender=SMPL_GENDER, device=DEVICE, scale_factor=SCALE_FACTOR
     )
 
     # Clear Blender scene
     clear_scene()
 
     # Load Template FBX
-    fbx_temp_obj = import_fbx(FBX_TEMPLATE_PATH_N_PREFIX+SMPL_GENDER.lower()+".fbx")
+    fbx_temp_obj = import_fbx(FBX_TEMPLATE_PATH_N_PREFIX + SMPL_GENDER.lower() + ".fbx")
 
     shape_key_values = compute_smpl_shape_key_values(params['betas'], params['body_pose'],
                                                      params['global_orient'], params['transl'], device=DEVICE)
 
-    select_smpl_mesh(fbx_temp_obj)
+    mesh_obj = select_smpl_mesh(fbx_temp_obj)
+    set_blender_shape_keys(mesh_obj, shape_key_values)
 
+    bpy.context.view_layer.update()
 
-
+    print("Done!")
 
