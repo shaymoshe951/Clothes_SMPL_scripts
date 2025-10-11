@@ -14,7 +14,7 @@ import torch
 from smplx import SMPL
 import trimesh
 import math
-from mathutils import Quaternion, Vector
+from mathutils import Quaternion, Matrix, Vector
 import numpy as np
 import bpy
 
@@ -29,6 +29,7 @@ SCALE_FACTOR = 0.01  # scales your input OBJ vertices before fitting
 DEVICE = "cpu"  # 'cpu' is fine for this
 
 AUTOMATIC_BONE_ORIENTATION = False
+
 
 def axis_angle_to_rot_mat(aa):
     """
@@ -122,6 +123,7 @@ def compute_smpl_shape_key_values(betas, body_pose, global_orient, transl, devic
 
     return values
 
+
 def set_blender_shape_keys(obj, shape_key_values):
     """
     Set the computed values on the object's shape keys.
@@ -157,10 +159,10 @@ def set_smpl_pose_on_armature(armature, global_orient, body_pose, device='cpu'):
 
     # Standard SMPL joint names (adjust if your import uses prefixes like 'mixamorig:')
     joint_names = [
-        'pelvis', 'left_hip', 'right_hip', 'spine1', 'left_knee', 'right_knee',
-        'spine2', 'left_ankle', 'right_ankle', 'spine3', 'left_foot', 'right_foot',
-        'neck', 'left_collar', 'right_collar', 'head', 'left_shoulder', 'right_shoulder',
-        'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hand', 'right_hand'
+        'pelvis', 'l_hip', 'r_hip', 'spine1', 'l_knee', 'r_knee',
+        'spine2', 'l_ankle', 'r_ankle', 'spine3', 'l_foot', 'r_foot',
+        'neck', 'l_collar', 'r_collar', 'head', 'l_shoulder', 'r_shoulder',
+        'l_elbow', 'r_elbow', 'l_wrist', 'r_wrist', 'l_hand', 'r_hand'
     ]
 
     # Full theta: global (root) + body_pose (23 locals)
@@ -176,22 +178,44 @@ def set_smpl_pose_on_armature(armature, global_orient, body_pose, device='cpu'):
 
     # Set per-bone rotations
     success_count = 0
-    for i, joint_name in enumerate(joint_names):
-        if joint_name in [b.name for b in armature.pose.bones]:
-            bone = armature.pose.bones[joint_name]
-            aa = theta_full[i].cpu().numpy()  # To numpy for mathutils
-            if torch.norm(torch.tensor(aa)) > 1e-6:  # Non-zero rotation
-                R = axis_angle_to_rot_mat(torch.tensor(aa, device=device)).cpu().numpy()
-                quat = Quaternion(
-                    (R[0, 0], R[0, 1], R[0, 2], R[1, 0], R[1, 1], R[1, 2], R[2, 0], R[2, 1], R[2, 2]))  # From matrix
+    joint_names_dict = {jn.lower(): i for i, jn in enumerate(joint_names)}
+    #    print(joint_names_dict)
+    # for i, joint_name in enumerate(joint_names):
+    #     if joint_name in [b.name for b in armature.pose.bones]:
+    for bone_name in [b.name for b in armature.pose.bones]:
+        if bone_name.lower() in joint_names_dict:
+            bone = armature.pose.bones[bone_name]
+            ind = joint_names_dict[bone_name.lower()]
+
+            aa_torch = theta_full[ind]  # Keep as torch for function
+            aa_np = aa_torch.cpu().numpy()  # For potential numpy ops
+
+            if np.linalg.norm(aa_np) > 1e-6:  # Non-zero
+                R_torch = axis_angle_to_rot_mat(aa_torch)  # (3,3) or (1,3,3)
+
+                # Ensure R is (3,3) numpy
+                if R_torch.dim() == 3 and R_torch.shape[0] == 1:
+                    R_torch = R_torch.squeeze(0)
+                R = R_torch.cpu().numpy()  # Now (3,3)
+
+                print(f"For bone {bone_name}: R.shape = {R.shape}")  # Debug: should be (3,3)
+
+                # Convert matrix to quaternion properly
+                rot_mat = Matrix(R.tolist())  # List for Matrix constructor
+                quat = rot_mat.to_quaternion()
                 bone.rotation_quaternion = quat
                 success_count += 1
+            else:
+                # Zero rotation: identity quat
+                bone.rotation_quaternion = Quaternion((1, 0, 0, 0))
+                success_count += 1
         else:
-            print(f"Warning: Bone '{joint_name}' not found.")
+            print(f"Warning: Bone '{bone_name}' not found.")
 
     bpy.ops.object.mode_set(mode='OBJECT')  # Back to Object Mode
     bpy.context.view_layer.update()
     print(f"Set rotations for {success_count}/24 bones.")
+
 
 def fit_smpl_to_obj(obj_path, smpl_model_path, gender, device, scale_factor=1.0):
     """Fit SMPL parameters to an OBJ mesh with optional scaling"""
@@ -309,15 +333,11 @@ def select_smpl_mesh(fbx_temp_obj):
 
     # Get the child mesh by name
     mesh_name = "SMPL-mesh-female"
-    armature_name = "SMPL-female"
     mesh = next((child for child in obj.children if child.name == mesh_name), None)
-    armature = next((child for child in obj.children if child.name == armature_name), None)
+    armature = obj
 
     if mesh:
         print(f"Found mesh child: {mesh.name} (type: {mesh.type})")
-
-    if armature:
-        print(f"Found armature child: {armature.name} (type: {armature.type})")
 
     return mesh, armature
 
