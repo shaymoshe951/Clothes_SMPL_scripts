@@ -19,7 +19,7 @@ UNIT_SCALE = 1.0
 
 # Optional: set True to rotate SMPL’s Z-forward coordinates into Blender’s Z-up
 # (+90° around X). Only enable if your posed mesh looks "lying on its back".
-FIX_SMPL_FRAME = False
+FIX_SMPL_FRAME = True
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Path setup & imports
