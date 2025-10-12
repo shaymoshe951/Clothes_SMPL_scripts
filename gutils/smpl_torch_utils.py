@@ -99,3 +99,44 @@ def fit_smpl_to_obj(mesh, smpl_model_path, gender='female', device='cpu', flag_d
     }
 
     return smpl, params
+
+def axis_angle_to_rot_mat(aa):
+    """
+    Convert axis-angle vector to 3x3 rotation matrix using Rodrigues' formula.
+
+    Args:
+        aa (torch.Tensor): Axis-angle vector(s) of shape (..., 3)
+
+    Returns:
+        torch.Tensor: Rotation matrix/matrices of shape (..., 3, 3)
+    """
+    batch_size = 1 if aa.dim() == 1 else aa.shape[0]
+    if aa.dim() == 1:
+        aa = aa.unsqueeze(0)
+
+    angle = torch.norm(aa, dim=-1, keepdim=True)
+    # Handle zero angle case
+    axis = aa / torch.clamp(angle, min=1e-8)
+
+    # Skew-symmetric matrix K
+    K = torch.zeros((batch_size, 3, 3), device=aa.device)
+    K[:, 0, 1] = -axis[:, 2]
+    K[:, 0, 2] = axis[:, 1]
+    K[:, 1, 0] = axis[:, 2]
+    K[:, 1, 2] = -axis[:, 0]
+    K[:, 2, 0] = -axis[:, 1]
+    K[:, 2, 1] = axis[:, 0]
+
+    # Identity
+    I = torch.eye(3, device=aa.device).unsqueeze(0).repeat(batch_size, 1, 1)
+
+    # Rodrigues' formula
+    sin_a = torch.sin(angle)
+    cos_a = torch.cos(angle)
+    R = I + sin_a.unsqueeze(-1).unsqueeze(-1) * K + (1 - cos_a.unsqueeze(-1).unsqueeze(-1)) * torch.matmul(K, K)
+
+    if batch_size == 1:
+        R = R.squeeze(0)
+
+    return R
+
