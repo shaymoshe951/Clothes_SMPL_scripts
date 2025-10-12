@@ -269,20 +269,24 @@ def import_obj_to_blender(obj_path, flag_single_object=False):
 
     return new_obj[0]
 
-def rot_obj(obj, axis_name='X', degree=90):
+def rot_obj(obj, axis_name='X', degree=90, flag_keep_location=True):
     ensure_object_mode()
 
     # Store original location (to preserve it)
     loc = obj.location.copy()
 
     # Create rotation matrix for 90 degrees around global X
-    rot_matrix = Matrix.Rotation(radians(90), 4, 'X')  # 4x4 for full transform
+    rot_matrix = Matrix.Rotation(radians(degree), 4, axis_name)  # 4x4 for full transform
+    print("Rotation matrix:\n", rot_matrix)
 
     # Apply to object's matrix (combines with existing rotation)
     obj.matrix_world = obj.matrix_world @ rot_matrix
 
     # Reset location to original (cancels any induced translation)
-    obj.location = loc
+    if flag_keep_location:
+        obj.location = loc
+
+    return rot_matrix
 
 
 def select_obj(obj):

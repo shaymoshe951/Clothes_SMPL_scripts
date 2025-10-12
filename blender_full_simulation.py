@@ -64,19 +64,16 @@ if __name__ == "__main__":
     # Set bone poses
     set_smpl_pose_on_armature(armature_obj, params['global_orient'], params['body_pose'], DEVICE)
 
-    # Apply translation (to armature or mesh; here to armature)
-    # armature_obj.location = Vector(params['transl'].cpu().numpy())
-
     bpy.context.view_layer.update()
 
     make_rigid(body_mesh_obj)
 
     garment_mesh_obj = import_obj_to_blender(OBJ_GARMENT_PATH)
 
-    rot_obj(garment_mesh_obj, 'X', 90)
+    rot_matrix = rot_obj(garment_mesh_obj, 'X', 90)
 
-    tx,ty,tz = params['transl'].numpy()
-    garment_mesh_obj.location = Vector((tx, tz, -ty))
+    rot_matrix.transpose()
+    garment_mesh_obj.location = rot_matrix.to_3x3() @ Vector(params['transl'])
 
     make_garment(garment_mesh_obj)
 
