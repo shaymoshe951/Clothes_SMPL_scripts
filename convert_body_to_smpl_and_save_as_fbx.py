@@ -4,10 +4,16 @@
 import sys
 import os
 
-EXTRA_PY_PATHS = [r"C:\Users\Lab\AppData\Roaming\Python\Python311\Scripts" + "\\..\\site-packages"]
+EXTRA_PY_PATHS = [r"C:\Users\Lab\AppData\Roaming\Python\Python311\Scripts" + "\\..\\site-packages",
+                  r"D:\projects\ClProjects\SMPL-Anthropometry"]
 for p in EXTRA_PY_PATHS:
     if p and os.path.isdir(p) and p not in sys.path:
         sys.path.append(p)
+
+for name in list(sys.modules.keys()):
+    if name.startswith("gutils"):
+        print(name)
+        del sys.modules[name]
 
 import numpy as np
 import torch
@@ -17,15 +23,16 @@ import math
 from mathutils import Quaternion, Matrix, Vector
 import numpy as np
 import bpy
+from gutils.smpl_torch_utils import *
 
 # ---------- Config ----------
 OBJ_BODY_PATH = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_modified.obj"
+SCALE_FACTOR = 0.01  # scales your input OBJ vertices before fitting
 SMPL_MODEL_PATH = r"D:\projects\ClProjects\SMPL_Model"  # Download from SMPL website
 SMPL_GENDER = "FEMALE"  # "MALE" | "FEMALE" | "NEUTRAL"
 OUTPUT_FBX = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m2.fbx"
 FBX_TEMPLATE_PATH_N_PREFIX = r"C:\Users\Lab\Downloads\template_smpl_"
 
-SCALE_FACTOR = 0.01  # scales your input OBJ vertices before fitting
 DEVICE = "cpu"  # 'cpu' is fine for this
 
 AUTOMATIC_BONE_ORIENTATION = False
@@ -217,64 +224,6 @@ def set_smpl_pose_on_armature(armature, global_orient, body_pose, device='cpu'):
     print(f"Set rotations for {success_count}/24 bones.")
 
 
-def fit_smpl_to_obj(obj_path, smpl_model_path, gender, device, scale_factor=1.0):
-    """Fit SMPL parameters to an OBJ mesh with optional scaling"""
-
-    mesh = trimesh.load(obj_path)
-    print(f"Original mesh bounds: {mesh.bounds}")
-    mesh.vertices *= scale_factor
-    print(f"Scaled mesh bounds (scale={scale_factor}): {mesh.bounds}")
-
-    target_vertices = torch.tensor(mesh.vertices, dtype=torch.float32).to(device)
-
-    smpl = SMPL(model_path=smpl_model_path, gender=gender).to(device)
-
-    betas = torch.zeros(10, requires_grad=True, device=device)
-    body_pose = torch.zeros(69, requires_grad=True, device=device)
-    global_orient = torch.zeros(3, requires_grad=True, device=device)
-    transl = torch.zeros(3, requires_grad=True, device=device)
-
-    optimizer = torch.optim.Adam([betas, body_pose, global_orient, transl], lr=0.01)
-
-    print("Fitting SMPL parameters...")
-    for i in range(1000):
-        optimizer.zero_grad()
-
-        output = smpl(betas=betas.unsqueeze(0),
-                      body_pose=body_pose.unsqueeze(0),
-                      global_orient=global_orient.unsqueeze(0),
-                      transl=transl.unsqueeze(0))
-
-        loss = torch.nn.functional.mse_loss(output.vertices[0], target_vertices)
-        loss.backward()
-        optimizer.step()
-
-        if i % 100 == 0:
-            print(f"Iteration {i}, Loss: {loss.item():.6f}")
-
-    # params = {
-    #     'betas': betas.detach().cpu().numpy(),
-    #     'body_pose': body_pose.detach().cpu().numpy(),
-    #     'global_orient': global_orient.detach().cpu().numpy(),
-    #     'transl': transl.detach().cpu().numpy(),
-    #     'gender': gender,
-    #     'scale_factor': scale_factor
-    # }
-
-    params = {
-        'betas': betas.detach(),
-        'body_pose': body_pose.detach(),
-        'global_orient': global_orient.detach(),
-        'transl': transl.detach(),
-    }
-
-    # # Save parameters
-    # np.savez(obj_path.replace('.obj', '_params2.npz'), **params)
-
-    # return params, output.vertices[0].detach().cpu().numpy(), mesh.faces
-    return smpl, params
-
-
 def ensure_object_mode():
     if bpy.context.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -358,10 +307,14 @@ def export_fbx(fbx_output_filename):
 
 # Main workflow
 if __name__ == "__main__":
+    # Load mesh
+    print('Starting SMPL fitting and FBX export...')
+    mesh = load_mesh_obj(OBJ_BODY_PATH, True, scale_factor=SCALE_FACTOR)
+
     # Fit SMPL
     model, params = fit_smpl_to_obj(
-        OBJ_BODY_PATH, SMPL_MODEL_PATH,
-        gender=SMPL_GENDER, device=DEVICE, scale_factor=SCALE_FACTOR
+        mesh, SMPL_MODEL_PATH,
+        gender=SMPL_GENDER, device=DEVICE
     )
 
     # Clear Blender scene

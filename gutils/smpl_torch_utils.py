@@ -20,7 +20,7 @@ def load_mesh_obj(obj_path, flag_verify_boundaries = True, scale_factor=0.01):
             raise ValueError(f"Mesh bounds seem off: {mesh.bounds}")
     return mesh
 
-def fit_smpl_to_obj(mesh, smpl_model_path, gender='female', device='cpu'):
+def fit_smpl_to_obj(mesh, smpl_model_path, gender='female', device='cpu', flag_debug = False):
     """Fit SMPL parameters to an OBJ mesh with optional scaling"""
 
     # mesh = trimesh.load(obj_path)
@@ -40,7 +40,7 @@ def fit_smpl_to_obj(mesh, smpl_model_path, gender='female', device='cpu'):
     optimizer = torch.optim.Adam([betas, body_pose, global_orient, transl], lr=0.1)
     # Scheduler: Reduce on validation loss plateau
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.4, patience=10, verbose=True, threshold=0.001, cooldown=0, min_lr=2e-3
+        optimizer, mode='min', factor=0.4, patience=10, threshold=0.001, cooldown=0, min_lr=2e-3
     )
     print("Fitting SMPL parameters...")
     sqr_loss_vector = []
@@ -71,31 +71,31 @@ def fit_smpl_to_obj(mesh, smpl_model_path, gender='female', device='cpu'):
             print(f"Converged at iteration {i}, max error: {max_error:.6f}, loss: {loss.item():.6f}")
             break
 
-    import matplotlib.pyplot as plt
-    epochs = list(range(1, len(sqr_loss_vector) + 1))  # x-axis: epochs 1 to 10
+    if flag_debug:
+        import matplotlib.pyplot as plt
+        epochs = list(range(1, len(sqr_loss_vector) + 1))  # x-axis: epochs 1 to 10
 
-    # If losses are a torch tensor, convert: loss_vector = losses.cpu().numpy().tolist()
+        # If losses are a torch tensor, convert: loss_vector = losses.cpu().numpy().tolist()
 
-    # Create the plot
-    plt.figure(figsize=(8, 5))  # Optional: Set figure size
-    plt.plot(epochs, max_err_vector, marker='o', linewidth=2, markersize=4, color='g', label='Max Error')
-    plt.plot(epochs, sqr_loss_vector, marker='_', linewidth=2, markersize=4, color='b', label='Training Loss')
-    plt.yscale('log')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Training Loss Over Epochs')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+        # Create the plot
+        plt.figure(figsize=(8, 5))  # Optional: Set figure size
+        plt.plot(epochs, max_err_vector, marker='o', linewidth=2, markersize=4, color='g', label='Max Error')
+        plt.plot(epochs, sqr_loss_vector, marker='_', linewidth=2, markersize=4, color='b', label='Training Loss')
+        plt.yscale('log')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training Loss Over Epochs')
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     params = {
-        'betas': betas.detach().cpu().numpy(),
-        'body_pose': body_pose.detach().cpu().numpy(),
-        'global_orient': global_orient.detach().cpu().numpy(),
-        'transl': transl.detach().cpu().numpy(),
+        'betas': betas.detach().cpu(),
+        'body_pose': body_pose.detach().cpu(),
+        'global_orient': global_orient.detach().cpu(),
+        'transl': transl.detach().cpu(),
         'gender': gender,
-        'scale_factor': scale_factor
     }
 
-    return params, output.vertices[0].detach().cpu().numpy(), mesh.faces
+    return smpl, params
