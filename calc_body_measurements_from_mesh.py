@@ -30,7 +30,7 @@ from measurement_definitions import STANDARD_LABELS
 OBJ_PATH   = __my_file__   # SMPL: 6890 verts; SMPL-X: 10475 verts
 MODEL_TYPE = "smpl"                         # "smpl" or "smplx"
 GENDER     = "FEMALE"                      # NEUTRAL / MALE / FEMALE
-NORMALIZE_HEIGHT = 160                     # e.g., 175 (cm) or None to keep original scale
+NORMALIZE_HEIGHT = None                     # e.g., 175 (cm) or None to keep original scale
 SAVE_IMAGE = None                           # e.g., r"D:\out.png" or None to just show
 # ------------------------------------
 

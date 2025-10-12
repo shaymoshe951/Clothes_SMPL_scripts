@@ -182,15 +182,15 @@ print("FBX saved!")
 
 # Main workflow
 if __name__ == "__main__":
-    obj_path = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_modified.obj"
-    obj_path = r"C:\Users\Lab\Downloads\clothes_images\liran_focal120_mesh_0_0.obj"
-    obj_path = r"C:\Users\Lab\Downloads\clothes_images\model_l1_mesh_0_0.obj"
+    obj_path = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_modified.obj"; scale_factor = 0.01 # This model is in CM
+    # obj_path = r"C:\Users\Lab\Downloads\clothes_images\liran_focal120_mesh_0_0.obj"; scale_factor = 1
+    obj_path = r"C:\Users\Lab\Downloads\clothes_images\model_l1_mesh_0_0.obj"; scale_factor = 1
     smpl_model_path = r"D:\projects\ClProjects\SMPL_Model"  # Download from SMPL website
 
     # Fit SMPL
     params, fitted_vertices, faces = fit_smpl_to_obj(
         obj_path, smpl_model_path,
-        gender='female', scale_factor=0.01
+        gender='female', scale_factor=scale_factor
     )
 
     # Save parameters
