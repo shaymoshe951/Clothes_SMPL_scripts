@@ -194,9 +194,11 @@ if __name__ == "__main__":
 
 
     # Fit SMPL
-    params, fitted_vertices, faces = fit_smpl_to_obj(
+    model, params = fit_smpl_to_obj(
         mesh, smpl_model_path,
         gender='female', device='cpu', flag_debug = True )
+
+    print("Here")
 
     # Save parameters
     # np.savez(obj_path.replace('.obj', '_params.npz'), **params)

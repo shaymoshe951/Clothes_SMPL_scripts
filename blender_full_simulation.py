@@ -54,6 +54,7 @@ if __name__ == "__main__":
     # Load Template FBX
     fbx_temp_obj = import_fbx(FBX_TEMPLATE_PATH_N_PREFIX + SMPL_GENDER.lower() + ".fbx")
 
+
     shape_key_values = compute_smpl_shape_key_values(params['betas'], params['body_pose'],
                                                      params['global_orient'], params['transl'], device=DEVICE)
 
@@ -71,6 +72,9 @@ if __name__ == "__main__":
     make_rigid(body_mesh_obj)
 
     garment_mesh_obj = import_obj_to_blender(OBJ_GARMENT_PATH)
+
+    tx,ty,tz = params['transl'].numpy()
+    garment_mesh_obj.location = Vector((tx, tz, -ty))
 
     rot_obj(garment_mesh_obj, 'X', 90)
 
