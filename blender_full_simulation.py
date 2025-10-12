@@ -65,7 +65,7 @@ if __name__ == "__main__":
     set_smpl_pose_on_armature(armature_obj, params['global_orient'], params['body_pose'], DEVICE)
 
     # Apply translation (to armature or mesh; here to armature)
-    armature_obj.location = Vector(params['transl'].cpu().numpy())
+    # armature_obj.location = Vector(params['transl'].cpu().numpy())
 
     bpy.context.view_layer.update()
 
@@ -73,10 +73,10 @@ if __name__ == "__main__":
 
     garment_mesh_obj = import_obj_to_blender(OBJ_GARMENT_PATH)
 
+    rot_obj(garment_mesh_obj, 'X', 90)
+
     tx,ty,tz = params['transl'].numpy()
     garment_mesh_obj.location = Vector((tx, tz, -ty))
-
-    rot_obj(garment_mesh_obj, 'X', 90)
 
     make_garment(garment_mesh_obj)
 
