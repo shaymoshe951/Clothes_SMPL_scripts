@@ -2,8 +2,8 @@ import torch
 from mathutils import Quaternion, Matrix, Vector
 import bpy
 from gutils.smpl_torch_utils import *
-import sys
 import os
+from math import radians
 
 
 
@@ -231,3 +231,118 @@ def export_fbx(fbx_output_filename):
         apply_scale_options='FBX_SCALE_ALL',
     )
     print(f"[OK] Exported FBX to: {fbx_output_filename}")
+
+def import_obj_to_blender(obj_path, flag_single_object=False):
+    if not os.path.exists(obj_path):
+        raise FileNotFoundError(obj_path)
+    print(f"📂 Importing OBJ garment from {obj_path} ...")
+    ensure_object_mode()
+
+    # --- Import OBJ with axis settings ---
+    if not hasattr(bpy.ops.wm, "obj_import"):
+        raise RuntimeError("This Blender build lacks 'bpy.ops.wm.obj_import' (OBJ importer).")
+    before = set(bpy.data.objects)
+    if flag_single_object:
+        bpy.ops.wm.obj_import(
+            filepath=obj_path,
+            validate_meshes=True,
+            split_mode='OFF',  # uncomment if you want one object (when supported by exporter)
+        )
+    else:
+        bpy.ops.wm.obj_import(
+            filepath=obj_path,
+            validate_meshes=True,
+            # split_mode='OFF',  # uncomment if you want one object (when supported by exporter)
+        )
+    after = set(bpy.data.objects)
+    new_obj = [o for o in (after - before) if o.type == 'MESH']
+    if not new_obj:
+        raise RuntimeError("OBJ import: no MESH objects found for garment.")
+
+    # # If multiple meshes came in, join into one garment
+    # if len(new_obj) > 1:
+    #     deselect_all()
+    #     for o in new_obj:
+    #         o.select_set(True)
+    #     bpy.context.view_layer.objects.active = new_obj[0]
+    #     bpy.ops.object.join()
+
+    return new_obj[0]
+
+def rot_obj(obj, axis_name='X', degree=90):
+    ensure_object_mode()
+
+    # Store original location (to preserve it)
+    loc = obj.location.copy()
+
+    # Create rotation matrix for 90 degrees around global X
+    rot_matrix = Matrix.Rotation(radians(90), 4, 'X')  # 4x4 for full transform
+
+    # Apply to object's matrix (combines with existing rotation)
+    obj.matrix_world = obj.matrix_world @ rot_matrix
+
+    # Reset location to original (cancels any induced translation)
+    obj.location = loc
+
+
+def select_obj(obj):
+    if not obj:
+        print("Error: No object provided!")
+        return
+
+    # Ensure obj is in the current view layer
+    view_layer = bpy.context.view_layer
+    if obj.name not in [o.name for o in view_layer.objects]:
+        print(f"Error: {obj.name} not in current view layer!")
+        return
+
+    # Deselect all first
+    deselect_all()
+
+    # Set selection and active (ensures context for mode_set)
+    obj.select_set(True)
+    view_layer.objects.active = obj
+
+    # Now safely switch to Object Mode
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except RuntimeError as e:
+        print(f"Mode switch failed: {e}. Attempting fallback...")
+        if bpy.context.mode != 'OBJECT':
+            print("Warning: Could not switch to Object Mode. Ensure object is valid.")
+    return
+
+def add_obj_modifier(obj, mod_type_name='COLLISION'):
+    select_obj(obj)
+
+    # Safely switch Properties editor to Physics context
+    physics_context_set = False
+    for area in bpy.context.screen.areas:
+        if area.type == 'PROPERTIES':
+            area.spaces.active.context = 'PHYSICS'
+            physics_context_set = True
+            break
+
+    if not physics_context_set:
+        print("Warning: No Properties editor found. Physics tab won't switch, but modifier still adds.")
+        # Optional: Create a Properties area if needed (splits the active screen)
+        # bpy.ops.screen.area_split(direction='RIGHT', factor=0.3)
+        # But avoid auto-splitting unless desired
+
+    # Add the Collision modifier
+    bpy.ops.object.modifier_add(type=mod_type_name)
+
+    # Optional: Configure the modifier
+    mod = obj.modifiers[-1]
+    return mod
+
+def make_rigid(obj):
+    mod = add_obj_modifier(obj, 'COLLISION')
+    #    mod.name = "CollisionRigid"
+    #    mod.settings.thickness_outer = 0.04  # Adjust as needed
+    #
+    print(f"Collision modifier added to {obj.name}. Properties tab switched to Physics.")
+
+def make_garment(obj):
+    mod = add_obj_modifier(obj, 'CLOTH')
+    print(f"CLOTH modifier added to {obj.name}. Properties tab switched to Physics.")
