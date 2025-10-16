@@ -5,10 +5,15 @@
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\model_l1_mesh_0_0.obj"
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\model_l1_mesh_fused.obj"
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\liran_mesh_fused.obj"
-__my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\liran_focal120_mesh_0_0.obj"
+# __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\liran_focal120_mesh_0_0.obj"
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\mesh_w_clothes_from_opensite\model_xs1_mesh.obj"
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\mesh_w_clothes_from_opensite\liran_mesh.obj"
 # __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\model_yali2_mesh_0_3.obj"
+# __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\mesh_w_clothes_from_opensite\liran_mesh.obj"
+# __my_file__ =  r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\BCNet\recs\model_xs1a_smpl.obj"
+# __my_file__ =  r"C:\Users\Lab\Downloads\clothes_images\model_yali2_mesh_0_0.obj"
+# __my_file__ =  r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\BCNet\recs\liran_smpl.obj"
+__my_file__ =  r"C:\Users\Lab\Downloads\fitted_mesh.obj"
 
 
 # smpl_measure_and_viz.py

@@ -2,9 +2,9 @@ import trimesh
 from PIL.ImageOps import scale
 import torch
 
-obj_path = r"C:\Users\Lab\Downloads\exp_obj_h.obj"
+obj_path = r"C:\Users\Lab\Downloads\clothes_images\model_yali2_mesh_0_0.obj"
 # obj_path_fbx = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\GarVerseLOD\outputs\temp\coarse_garment\66859611_lbs_spbs_human_m.fbx"
-obj_path_fbx = r"C:\Users\Lab\Downloads\exp_obj_smpl.obj"
+obj_path_fbx = r"\\wsl.localhost\Ubuntu-22.04\home\shay\projects\BCNet\recs\model_xs1a_smpl.obj"
 smpl_model_path = r"D:\projects\ClProjects\SMPL_Model"  # Download from SMPL website
 
 mesh_org = trimesh.load(obj_path)
@@ -18,7 +18,7 @@ print(f"Fbx mesh bounds: {mesh_fbx.bounds}")
 mesh_org_vertices = mesh_org.vertices #list(mesh_org.geometry.values())[0].vertices
 mesh_fbx_vertices = mesh_fbx.vertices #list(mesh_fbx.geometry.values())[0].vertices
 
-v_org = torch.tensor(mesh_org_vertices[0::5,:][:mesh_fbx_vertices.shape[0],:], dtype=torch.float32, requires_grad=False)
+v_org = torch.tensor(mesh_org_vertices, dtype=torch.float32, requires_grad=False)
 v_fbx = torch.tensor(mesh_fbx_vertices, dtype=torch.float32, requires_grad=False)
 # T = torch.tensor(torch.ones((3,3)), dtype=torch.float32)
 # bias = torch.tensor(torch.zeros((3,1)), dtype=torch.float32)

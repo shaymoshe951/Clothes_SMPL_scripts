@@ -77,5 +77,16 @@ if __name__ == "__main__":
 
     make_garment(garment_mesh_obj)
 
+    # scene = bpy.context.scene
+    # scene.frame_start = 1
+    # scene.frame_end = 20
+    # scene.frame_set(1)
+    # beta_key = body_mesh_obj.data.shape_keys.key_blocks['Shape000']
+    # beta_key.keyframe_insert(data_path="value")
+    #
+    # scene.frame_set(20)
+    # beta_key.value = 5.0
+    # beta_key.keyframe_insert(data_path="value")
+
     print("Done!")
 
